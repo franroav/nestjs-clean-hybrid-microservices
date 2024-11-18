@@ -1,0 +1,43 @@
+# Node modules
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Compiled output
+*.js
+*.d.ts
+*.map
+
+# Dependency directories
+apps/**/node_modules/
+libs/**/node_modules/
+
+# Coverage reports
+coverage/
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Other
+.DS_Store
+Thumbs.db
+
+# Docker files (optional)
+docker-compose*.yml
+
+package-lock.json

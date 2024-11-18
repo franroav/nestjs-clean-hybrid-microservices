@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webkonce
+  labels:
+    app: webkonce
+spec:
+  selector:
+    app: webkonce
+  ports:
+    - protocol: TCP
+      name: web
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer

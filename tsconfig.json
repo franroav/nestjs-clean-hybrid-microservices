@@ -1,0 +1,72 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "es6",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "paths": {
+      "@app/*": [
+        "apps/*/src"
+      ],
+      "@shared/*": [
+        "libs/shared/src"
+      ],
+      "@app/shared": [
+        "libs/shared/src"
+      ],
+      "@app/shared/*": [
+        "libs/shared/src/*"
+      ],
+      "@app/adapters": [
+        "libs/adapters/src"
+      ],
+      "@app/adapters/*": [
+        "libs/adapters/src/*"
+      ],
+      "@app/domain": [
+        "libs/domain/src"
+      ],
+      "@app/domain/*": [
+        "libs/domain/src/*"
+      ],
+      "@app/public": [
+        "libs/public/src"
+      ],
+      "@app/public/*": [
+        "libs/public/src/*"
+      ],
+      "@app/infrastructure": [
+        "libs/infrastructure/src"
+      ],
+      "@app/infrastructure/*": [
+        "libs/infrastructure/src/*"
+      ],
+      "@app/application": [
+        "libs/application/src"
+      ],
+      "@app/application/*": [
+        "libs/application/src/*"
+      ]
+    }
+  },
+  "include": [
+    "apps/user-service/src/**/*",
+    "libs/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

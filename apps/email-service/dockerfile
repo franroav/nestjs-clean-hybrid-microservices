@@ -1,0 +1,204 @@
+FROM node:18-alpine As development
+
+# Install curl
+RUN apk --no-cache add curl
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build mail-service
+
+FROM node:18-alpine as production
+
+# Install curl
+RUN apk --no-cache add curl
+
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN npm install --only=production
+
+COPY . .
+
+COPY --from=development /usr/src/app/dist ./dist
+
+CMD ["node", "dist/apps/email-service/main"]
+
+
+
+# # Stage 1: Build the application
+# FROM node:18-alpine AS builder
+
+# # Set working directory
+# WORKDIR /usr/src/app
+
+# # Copy root package.json and package-lock.json (shared dependencies)
+# COPY ../../package*.json ./
+
+# # Install dependencies
+# RUN npm install
+
+# # Copy the specific microservice source code
+# COPY ./apps/mail-service ./apps/mail-service
+# COPY ../../libs ./libs
+
+# # Copy the tsconfig.json file and other configuration files if necessary
+# COPY ../../tsconfig.json ./
+# COPY ../../tsconfig.build.json ./
+# COPY ../../nest-cli.json ./
+
+# # Navigate to mail-service and build
+# WORKDIR /usr/src/app/apps/mail-service
+# # RUN npm run build:mail-service
+
+# # Stage 2: Create the production image
+# FROM node:18-alpine
+
+# # Set working directory for the production build
+# WORKDIR /usr/src/app
+
+# # Copy only the built output from the first stage
+# COPY --from=builder /usr/src/app/dist/apps/mail-service ./dist
+
+# # Run the built application
+# CMD ["npm", "run", "start:prod-mail-service"]
+
+
+
+
+
+
+
+# # Base image for development
+# FROM node:16.15.0-alpine3.15 AS builder
+
+# # Set the working directory
+# WORKDIR /usr/src/app
+
+# # Copy package.json and install dependencies
+# COPY package*.json ./
+# RUN npm install
+
+# # Copy the entire service code into the container
+# COPY . .
+
+# # Build the application
+# RUN npm run build:mail-service
+
+# # Production stage
+# FROM node:16.15.0-alpine3.15 AS production
+
+# # Set environment variable
+# ARG NODE_ENV=production
+# ENV NODE_ENV=${NODE_ENV}
+
+# # Set the working directory
+# WORKDIR /usr/src/app
+
+# # Copy only the production dependencies
+# COPY package*.json ./
+# RUN npm install --only=production --omit=dev
+
+# # Copy the built files from the builder stage
+# COPY --from=builder /usr/src/app/dist/apps/mail-service ./dist
+
+# # Command to start the service
+# CMD ["npm", "run", "start:prod"]
+
+
+
+
+
+
+
+# # Stage 1: Build the application
+# FROM node:18-alpine AS builder
+
+# # Set working directory
+# WORKDIR /usr/src/app
+
+# # Copy root package.json and lock file
+# COPY ../../package*.json ./
+
+# # Install dependencies
+# RUN npm install
+
+# # Copy the monorepo source code
+# COPY ../../ .
+
+# # Build only the mail-service
+# RUN npm run build:mail-service
+
+# # Stage 2: Create the production image
+# FROM node:18-alpine
+
+# # Set working directory for the production build
+# WORKDIR /usr/src/app
+
+# # Copy only the built output from the first stage
+# COPY --from=builder /usr/src/app/dist/apps/mail-service ./dist
+
+
+# # Run the built application
+# CMD ["node", "dist/main.js"]
+
+
+
+
+
+
+
+# # Use a base image
+# FROM node:18-alpine
+
+# # Set working directory
+# WORKDIR /usr/src/app
+
+# # Copy package.json and package-lock.json
+# COPY package*.json ./
+
+# # Install dependencies
+# RUN npm install --production
+
+# # Copy the build files to the container
+# COPY dist/apps/monorepo-nest ./dist
+
+# # Expose the desired port (optional)
+# # EXPOSE 3000
+
+# # Run the built app
+# CMD ["node", "dist\apps\monorepo-nest\main.js"]
+
+# # apps/user-service/Dockerfile
+# # apps/mail-service/Dockerfile
+
+# FROM node:14-alpine
+
+# WORKDIR /app
+
+# # Copy the root package.json and package-lock.json files into the container
+# COPY ../../package*.json ./
+
+# # Install dependencies for the entire monorepo
+# RUN npm install
+
+# # Copy the specific service code into the container
+# COPY ../../ ./
+
+# # Build the microservice
+# RUN npm run build apps/mail-service
+
+# # Expose necessary port (optional, depends on service)
+# # EXPOSE 3000
+
+# # Start the microservice
+# CMD ["node", "dist/apps/mail-service/main"]

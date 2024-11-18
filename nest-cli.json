@@ -1,0 +1,227 @@
+{
+  "monorepo": true,
+  "root": "apps/user-service",
+  "sourceRoot": "apps/user-service/src",
+  "compilerOptions": {
+    "webpack": true,
+    "tsConfigPath": "apps/user-service/tsconfig.app.json"
+  },
+  "projects": {
+    "user-service": {
+      "type": "application",
+      "root": "apps/user-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-service/tsconfig.app.json"
+      }
+    },
+    "shared": {
+      "type": "library",
+      "root": "libs/shared",
+      "entryFile": "index",
+      "sourceRoot": "libs/shared/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/shared/tsconfig.lib.json"
+      }
+    },
+    "adapters": {
+      "type": "library",
+      "root": "libs/adapters",
+      "entryFile": "index",
+      "sourceRoot": "libs/adapters/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/adapters/tsconfig.lib.json"
+      }
+    },
+    "domain": {
+      "type": "library",
+      "root": "libs/domain",
+      "entryFile": "index",
+      "sourceRoot": "libs/domain/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/domain/tsconfig.lib.json"
+      }
+    },
+    "api-gateway": {
+      "type": "application",
+      "root": "apps/api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
+    "public": {
+      "type": "library",
+      "root": "libs/public",
+      "entryFile": "index",
+      "sourceRoot": "libs/public/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/public/tsconfig.lib.json"
+      }
+    },
+    "infrastructure": {
+      "type": "library",
+      "root": "libs/infrastructure",
+      "entryFile": "index",
+      "sourceRoot": "libs/infrastructure/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/infrastructure/tsconfig.lib.json"
+      }
+    },
+    "application": {
+      "type": "library",
+      "root": "libs/application",
+      "entryFile": "index",
+      "sourceRoot": "libs/application/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/application/tsconfig.lib.json"
+      }
+    },
+    "email-service": {
+      "type": "application",
+      "root": "apps/email-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/email-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/email-service/tsconfig.app.json"
+      }
+    },
+    "cache-service": {
+      "type": "application",
+      "root": "apps/cache-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/cache-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/cache-service/tsconfig.app.json"
+      }
+    },
+    "notification-service": {
+      "type": "application",
+      "root": "apps/notification-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/notification-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/notification-service/tsconfig.app.json"
+      }
+    },
+    "billing-service": {
+      "type": "application",
+      "root": "apps/billing-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/billing-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/billing-service/tsconfig.app.json"
+      }
+    },
+    "order-service": {
+      "type": "application",
+      "root": "apps/order-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/order-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/order-service/tsconfig.app.json"
+      }
+    },
+    "payment-service": {
+      "type": "application",
+      "root": "apps/payment-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/payment-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/payment-service/tsconfig.app.json"
+      }
+    },
+    "delivery-service": {
+      "type": "application",
+      "root": "apps/delivery-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/delivery-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/delivery-service/tsconfig.app.json"
+      }
+    },
+    "card-service": {
+      "type": "application",
+      "root": "apps/card-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/card-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/card-service/tsconfig.app.json"
+      }
+    },
+    "risk-service": {
+      "type": "application",
+      "root": "apps/risk-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/risk-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/risk-service/tsconfig.app.json"
+      }
+    },
+    "customer-service": {
+      "type": "application",
+      "root": "apps/customer-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/customer-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/customer-service/tsconfig.app.json"
+      }
+    },
+    "account-service": {
+      "type": "application",
+      "root": "apps/account-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/account-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/account-service/tsconfig.app.json"
+      }
+    },
+    "transaction-service": {
+      "type": "application",
+      "root": "apps/transaction-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/transaction-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/transaction-service/tsconfig.app.json"
+      }
+    },
+    "client-service": {
+      "type": "application",
+      "root": "apps/client-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/client-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/client-service/tsconfig.app.json"
+      }
+    },
+    "bank-service": {
+      "type": "application",
+      "root": "apps/bank-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/bank-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/bank-service/tsconfig.app.json"
+      }
+    },
+    "commerce-service": {
+      "type": "application",
+      "root": "apps/commerce-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/commerce-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/commerce-service/tsconfig.app.json"
+      }
+    },
+    "apps-service": {
+      "type": "application",
+      "root": "apps/apps-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/apps-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/apps-service/tsconfig.app.json"
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+// Define the datasource for MongoDB
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// Generate Prisma client for MongoDB
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+// User model
+model User {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  email    String @unique
+  password String
+}
+
+// Agricultores model
+model Agricultores {
+  id       String    @id @default(auto()) @map("_id") @db.ObjectId
+  nombre   String    @unique
+  email    String    @unique
+  campos   Campos[]
+  cosechas Cosecha[]
+}
+
+// Campos model
+model Campos {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  nombre       String       @unique
+  ubicacion    String       @unique
+  agricultorId String       @db.ObjectId
+  agricultor   Agricultores @relation(fields: [agricultorId], references: [id])
+  cosechas     Cosecha[] // Back reference to Cosecha
+}
+
+// Clientes model
+model Clientes {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  nombre String @unique
+  email  String @unique
+}
+
+// Cosecha model
+model Cosecha {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  frutaId      String @db.ObjectId
+  variedadId   String @db.ObjectId
+  agricultorId String @db.ObjectId
+  campoId      String @db.ObjectId
+
+  fruta      Fruta        @relation(fields: [frutaId], references: [id])
+  variedad   Variedad     @relation(fields: [variedadId], references: [id])
+  agricultor Agricultores @relation(fields: [agricultorId], references: [id])
+  campo      Campos       @relation(fields: [campoId], references: [id])
+}
+
+// Fruta model
+model Fruta {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  nombre     String     @unique
+  cosechas   Cosecha[] // Back reference to Cosecha
+  variedades Variedad[] // Back reference to Variedad
+}
+
+// Variedad model
+model Variedad {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  nombre  String
+  frutaId String @db.ObjectId
+
+  fruta    Fruta     @relation(fields: [frutaId], references: [id])
+  cosechas Cosecha[] // Back reference to Cosecha
+}

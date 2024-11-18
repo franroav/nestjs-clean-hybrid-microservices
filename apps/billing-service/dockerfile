@@ -1,0 +1,52 @@
+# Stage 1: Development
+FROM node:18-alpine AS development
+
+# Install curl and any build dependencies
+RUN apk --no-cache add curl
+
+# Install PostgreSQL client (optional if you need CLI interaction with PostgreSQL)
+RUN apk add --no-cache postgresql-client
+
+WORKDIR /usr/src/app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies including 'pg' for PostgreSQL
+RUN npm install
+
+# Copy all source code
+COPY . .
+
+# Build the billing service
+RUN npm run build billing-service
+
+# Stage 2: Production
+FROM node:18-alpine AS production
+
+# Install curl and any build dependencies
+RUN apk --no-cache add curl
+
+# Install PostgreSQL client (optional)
+RUN apk add --no-cache postgresql-client
+
+# Set the environment to production
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
+
+WORKDIR /usr/src/app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install only production dependencies (pg will be included if it's in package.json)
+RUN npm install --only=production
+
+# Copy all source code
+COPY . .
+
+# Copy the built files from the development stage
+COPY --from=development /usr/src/app/dist ./dist
+
+# Set the command to run the application
+CMD ["node", "dist/apps/billing-service/main"]

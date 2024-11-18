@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webkonce
+  labels:
+    app: webkonce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webkonce
+  template:
+    metadata:
+      labels:
+        app: webkonce
+    spec:
+      containers:
+        - name: webkonce
+          image: xxxxxxxxx.dkr.ecr.us-east-1.amazonaws.com/api-repo
+          imagePullPolicy: Always # for latest image version , user never for local docker enviroment
+          ports:
+            - containerPort: 3000
