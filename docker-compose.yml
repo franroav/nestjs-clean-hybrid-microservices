@@ -1,0 +1,1043 @@
+version: "3.8"
+
+services:
+  # SQLite3 database container
+  sqlite3:
+    image: nouchka/sqlite3:latest
+    container_name: sqlite3
+    volumes:
+      - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db
+    networks:
+      - app_network
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+
+  # Redis for caching
+  redis:
+    container_name: redis
+    image: redis:7.0.8
+    networks:
+      - app_network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+
+  # NATS for messaging
+  nats:
+    image: nats
+    container_name: nats-server
+    ports:
+      - "4222:4222"
+    networks:
+      - app_network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: zookeeper:3.7
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - app_network
+
+  # Kafka for message brokering
+  kafka1:
+    image: wurstmeister/kafka:latest
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka1:9093,OUTSIDE://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE # Specify which listener to use for inter-broker communication
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+    networks:
+      - app_network
+
+  kafka2:
+    image: wurstmeister/kafka:latest
+    ports:
+      - "9094:9092" # Change port mapping to avoid conflicts
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka2:9093,OUTSIDE://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9094
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 2
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE # Specify which listener to use for inter-broker communication
+    networks:
+      - app_network
+
+  kafka3:
+    image: wurstmeister/kafka:latest
+    ports:
+      - "9095:9092" # Change port mapping to avoid conflicts
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka3:9093,OUTSIDE://localhost:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9095
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 3
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE # Specify which listener to use for inter-broker communication
+    networks:
+      - app_network
+  # kafka:
+  #   image: confluentinc/cp-kafka:latest
+  #   container_name: kafka
+  #   depends_on:
+  #     - zookeeper
+  #   ports:
+  #     - "9092:9092"
+  #     - "9093:9093"
+  #   environment:
+  #       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  #       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:9093
+  #       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
+  #       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+  #       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #   networks:
+  #     - app_network
+
+  # PostgreSQL for the Billing Service
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: billing
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  # Consul service for service discovery
+  consul:
+    image: consul:1.14.3
+    container_name: consul
+    ports:
+      - "8500:8500"
+    command: agent -dev -client=0.0.0.0 -ui
+    networks:
+      - app_network
+    environment:
+      CONSUL_BIND_INTERFACE: eth0
+
+  # Billing Service with PostgreSQL and Kafka
+  billing-service:
+    build:
+      context: .
+      dockerfile: apps/billing-service/dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: user
+      DB_PASSWORD: password
+      DB_NAME: billing
+      KAFKA_BROKER: kafka1:9093,kafka2:9093,kafka3:9093 # Updated to include all brokers
+      # KAFKA_BROKER: kafka:9092 # Adjusted to internal Kafka port
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: billing-service
+      SERVICE_ID: billing-service-1
+      SERVICE_PORT: 3000
+      MONGODB_URI: mongodb://root:password123@mongodb-primary:27017/
+    depends_on:
+      - postgres
+      - kafka1
+      - kafka2
+      - kafka3
+      - consul
+      - mongodb-primary
+    networks:
+      - app_network
+    volumes:
+      - .:/usr/src/app
+    command: >
+      sh -c "
+        PGPASSWORD=password psql -h postgres -U user -d billing -f ./apps/billing-service/src/billing/migrations/migration.sql &&
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"billing-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nestjs\", \"billing\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev billing-service --watch
+      "
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      DB_STORAGE_PATH: /usr/src/app/libs/infrastructure/src/databases/sequelize/.db/data.sqlite3
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: user-service
+      SERVICE_ID: user-service-1
+      SERVICE_PORT: 3001
+      DATABASE_URL: mongodb://root:password123@mongodb-primary:27017/
+    volumes:
+      - .:/usr/src/app
+      - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db
+    depends_on:
+      - consul
+      - sqlite3
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"user-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev user-service --watch
+      "
+
+  # Email Service
+  email-service:
+    build:
+      context: .
+      dockerfile: apps/email-service/dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: email-service
+      SERVICE_ID: email-service-1
+      SERVICE_PORT: 3003
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+      - nats
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"email-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev email-service --watch
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Cache Service
+  cache-service:
+    build:
+      context: .
+      dockerfile: apps/cache-service/dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: cache-service
+      SERVICE_ID: cache-service-1
+      SERVICE_PORT: 3002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - consul
+      - redis
+    networks:
+      - app_network
+    command: >
+      sh -c "npm run start:dev cache-service --watch"
+
+    # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/dockerfile
+    ports:
+      - "9001:9001"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: api-gateway
+      SERVICE_ID: api-gateway-1
+      SERVICE_PORT: 9001
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"api-gateway\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev api-gateway --watch
+      "
+
+  # Card Service
+  card-service:
+    build:
+      context: .
+      dockerfile: apps/card-service/dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: card-service
+      SERVICE_ID: card-service-1
+      SERVICE_PORT: 3004
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"card-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev card-service --watch
+      "
+
+  # Delivery Service
+  delivery-service:
+    build:
+      context: .
+      dockerfile: apps/delivery-service/dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: delivery-service
+      SERVICE_ID: delivery-service-1
+      SERVICE_PORT: 3005
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"delivery-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev delivery-service --watch
+      "
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: notification-service
+      SERVICE_ID: notification-service-1
+      SERVICE_PORT: 3006
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"notification-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev notification-service --watch
+      "
+
+  # Order Service
+  order-service:
+    build:
+      context: .
+      dockerfile: apps/order-service/dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: order-service
+      SERVICE_ID: order-service-1
+      SERVICE_PORT: 3007
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"order-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev order-service --watch
+      "
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/payment-service/dockerfile
+    ports:
+      - "3008:3008"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: payment-service
+      SERVICE_ID: payment-service-1
+      SERVICE_PORT: 3008
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"payment-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev payment-service --watch
+      "
+
+  # Risk Service
+  risk-service:
+    build:
+      context: .
+      dockerfile: apps/risk-service/dockerfile
+    ports:
+      - "3009:3009"
+    environment:
+      NODE_ENV: development
+      JWT_SECRET: your_jwt_secret_key
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      SERVICE_NAME: risk-service
+      SERVICE_ID: risk-service-1
+      SERVICE_PORT: 3009
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - consul
+    networks:
+      - app_network
+    command: >
+      sh -c "
+        curl -X PUT -d '
+        {
+          \"ID\": \"${SERVICE_ID}\",
+          \"Name\": \"${SERVICE_NAME}\",
+          \"Address\": \"risk-service\",
+          \"Port\": ${SERVICE_PORT},
+          \"Tags\": [\"nodejs\"]
+        }' http://consul:8500/v1/agent/service/register &&
+        npm run start:dev risk-service --watch
+      "
+  
+  mongodb-primary:
+    image: docker.io/bitnami/mongodb:5.0
+    environment:
+      MONGODB_ADVERTISED_HOSTNAME: mongodb-primary
+      MONGODB_REPLICA_SET_MODE: primary
+      MONGODB_ROOT_PASSWORD: password123
+      MONGODB_REPLICA_SET_KEY: replicasetkey123
+    volumes:
+      - "mongodb_master_data:/bitnami/mongodb"
+      # - ./libs/shared/src/scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh  # Mounting the init script
+    ports:
+      - "27017:27017"
+    networks:
+      - app_network
+    # command: ["bash", "-c", "/docker-entrypoint-initdb.d/init-replica.sh"]  # Ensure the script runs at startup
+
+  mongodb-secondary:
+    image: docker.io/bitnami/mongodb:5.0
+    depends_on:
+      - mongodb-primary
+    environment:
+      MONGODB_ADVERTISED_HOSTNAME: mongodb-secondary
+      MONGODB_REPLICA_SET_MODE: secondary
+      MONGODB_INITIAL_PRIMARY_HOST: mongodb-primary
+      MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD: password123
+      MONGODB_REPLICA_SET_KEY: replicasetkey123
+    volumes:
+      - "mongodb_secondary_data:/bitnami/mongodb" # Volume for persistent storage
+    networks:
+      - app_network
+
+  mongodb-arbiter:
+    image: docker.io/bitnami/mongodb:5.0
+    depends_on:
+      - mongodb-primary
+    environment:
+      MONGODB_ADVERTISED_HOSTNAME: mongodb-arbiter
+      MONGODB_REPLICA_SET_MODE: arbiter
+      MONGODB_INITIAL_PRIMARY_HOST: mongodb-primary
+      MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD: password123
+      MONGODB_REPLICA_SET_KEY: replicasetkey123
+    volumes:
+      - "mongodb_arbiter_data:/bitnami/mongodb" # Volume for persistent storage
+    networks:
+      - app_network
+
+volumes:
+  redis:
+    driver: local
+  postgres-data:
+    driver: local
+  mongodb_master_data:
+    driver: local
+  mongodb_secondary_data:
+    driver: local
+  mongodb_arbiter_data:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
+# LEGACY
+
+# version: "3.8"
+
+# services:
+#   # SQLite3 database container
+#   sqlite3:
+#     image: nouchka/sqlite3:latest
+#     container_name: sqlite3
+#     volumes:
+#       - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db # Ensure SQLite data is accessible and persists
+#     networks:
+#       - default
+#     ports:
+#       - "8080:8080" # Optional: expose a port if necessary for debugging
+#     stdin_open: true # Keep stdin open to allow for interactive mode
+#     tty: true # Allocate a pseudo-TTY
+#   # Redis for caching
+#   redis:
+#     container_name: redis
+#     image: redis:7.0.8
+#     ports:
+#       - "6379:6379"
+#     networks:
+#       - default
+#     volumes:
+#       - redis:/data
+#   # redis:
+#   #   container_name: redis
+#   #   image: redis:7.0.8
+#   #   ports:
+#   #     - "6379:6379"
+#   #   networks:
+#   #     - default
+
+#   # NATS for messaging
+#   nats:
+#     image: nats
+#     container_name: nats-server
+#     ports:
+#       - "4222:4222"
+#     networks:
+#       - default
+
+#     # Zookeeper for Kafka
+#   zookeeper:
+#     image: zookeeper:3.7
+#     container_name: zookeeper
+#     ports:
+#       - "2181:2181"
+#     networks:
+#       - default
+#       # - kafka-network
+
+#   kafka:
+#     image: confluentinc/cp-kafka:latest
+#     container_name: kafka
+#     depends_on:
+#       - zookeeper
+#     ports:
+#       - "9092:9092"
+#     environment:
+#       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#       KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
+#       KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+#       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+#       KAFKA_LISTENER_NAME: OUTSIDE
+#       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE # Add this line to specify the inter-broker listener
+#     networks:
+#       - default
+#       # - kafka-network
+#   # Zookeeper for Kafka
+#   # zookeeper:
+#   #   image: zookeeper:3.7
+#   #   container_name: zookeeper
+#   #   ports:
+#   #     - "2181:2181"
+#   #   networks:
+#   #     - default
+
+#   # # Kafka for message brokering
+#   # kafka:
+#   #   image: confluentinc/cp-kafka:latest
+#   #   container_name: kafka
+#   #   depends_on:
+#   #     - zookeeper
+#   #   ports:
+#   #     - "9092:9092"
+#   #   environment:
+#   #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#   #     KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
+#   #     KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+#   #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+#   #     KAFKA_LISTENER_NAME: OUTSIDE
+#   #     KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+#   #   networks:
+#   #     - default
+
+#   # PostgreSQL for the Billing Service
+#   postgres:
+#     image: postgres:14
+#     container_name: postgres
+#     environment:
+#       POSTGRES_USER: user
+#       POSTGRES_PASSWORD: password
+#       POSTGRES_DB: billing
+#     ports:
+#       - "5433:5432"
+#     volumes:
+#       - postgres-data:/var/lib/postgresql/data
+#     networks:
+#       - default
+
+#   # Consul service for service discovery
+#   consul:
+#     image: consul:1.14.3
+#     container_name: consul
+#     ports:
+#       - "8500:8500"
+#     command: agent -dev -client=0.0.0.0 -ui
+#     networks:
+#       - default
+#     environment:
+#       - CONSUL_BIND_INTERFACE=eth0
+
+#   # Billing Service with PostgreSQL and Kafka
+#   billing-service:
+#     build:
+#       context: .
+#       dockerfile: apps/billing-service/dockerfile
+#     ports:
+#       - "3000:3000"
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - DB_HOST=postgres
+#       - DB_PORT=5433
+#       - DB_USERNAME=user
+#       - DB_PASSWORD=password
+#       - DB_NAME=billing
+#       - KAFKA_BROKER=kafka:9092
+#       - CONSUL_HOST=consul
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=billing-service
+#       - SERVICE_ID=billing-service-1
+#       - SERVICE_PORT=3000
+#     depends_on:
+#       - postgres
+#       - kafka
+#       - consul
+#     networks:
+#       - default
+#     volumes:
+#       - .:/usr/src/app
+#     command: >
+#       sh -c "
+#         # Run migration
+#         PGPASSWORD=password psql -h postgres -U user -d billing -f ./apps/billing-service/src/billing/migrations/migration.sql &&
+#         # Register the service with Consul
+#         curl -X PUT -d '
+#         {
+
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"billing-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nestjs\", \"billing\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+
+#   # User Service
+#   user-service:
+#     build:
+#       context: .
+#       dockerfile: apps/user-service/dockerfile
+#     ports:
+#       - "3001:3001"
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - DB_STORAGE_PATH=/usr/src/app/libs/infrastructure/src/databases/sequelize/.db/data.sqlite3
+#       - CONSUL_HOST=consul
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=user-service
+#       - SERVICE_ID=user-service-1
+#       - SERVICE_PORT=3001
+#     volumes:
+#       - .:/usr/src/app
+#       - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db
+#     command: >
+#       sh -c "
+#         curl -X PUT -d '
+#         {
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"user-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nodejs\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+#     depends_on:
+#       - consul
+#       - sqlite3
+#     networks:
+#       - default
+
+#   # Email Service
+#   email-service:
+#     build:
+#       context: .
+#       dockerfile: apps/email-service/dockerfile
+#     ports:
+#       - "3003:3003"
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - CONSUL_HOST=consul
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=email-service
+#       - SERVICE_ID=email-service-1
+#       - SERVICE_PORT=3003
+#     volumes:
+#       - .:/usr/src/app
+#     command: >
+#       sh -c "
+#         curl -X PUT -d '
+#         {
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"email-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nodejs\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+#     depends_on:
+#       - consul
+#       - nats
+#     networks:
+#       - default
+
+#   # Cache Service
+#   cache-service:
+#     build:
+#       context: .
+#       dockerfile: apps/cache-service/dockerfile
+#     ports:
+#       - "3002:3002"
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - CONSUL_HOST=consul
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=cache-service
+#       - SERVICE_ID=cache-service-1
+#       - SERVICE_PORT=3002
+#       - REDIS_HOST=redis # Use the Redis service name
+#       - REDIS_PORT=6379
+#     depends_on:
+#       - consul
+#       - redis
+#     networks:
+#       - default
+
+# volumes:
+#   postgres-data:
+#     driver: local
+#   redis:
+
+# networks:
+#   default:
+#     driver: bridge
+
+# BASIC LEGACY
+
+# version: '3.8'
+
+# services:
+#   # Nats for messaging
+#   redis:
+#     container_name: redis
+#     image: redis:7.0.8
+#     ports:
+#       - "6379:6379"
+#     networks:
+#       - default
+#   nats:
+#     image: nats
+#     container_name: nats-server
+#     ports:
+#       - "4222:4222"
+#     networks:
+#       - default
+
+#     # Zookeeper for Kafka
+#   zookeeper:
+#     image: zookeeper:3.7
+#     container_name: zookeeper
+#     ports:
+#       - "2181:2181"
+#     networks:
+#       - default
+#       # - kafka-network
+
+#   kafka:
+#     image: confluentinc/cp-kafka:latest
+#     container_name: kafka
+#     depends_on:
+#       - zookeeper
+#     ports:
+#       - "9092:9092"
+#     environment:
+#       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+#       KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
+#       KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+#       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+#       KAFKA_LISTENER_NAME: OUTSIDE
+#       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE # Add this line to specify the inter-broker listener
+#     networks:
+#       - default
+#       # - kafka-network
+#   # Consul service for service discovery
+#   consul:
+#     image: consul:1.14.3
+#     container_name: consul
+#     ports:
+#       - '8500:8500'
+#     command: agent -dev -client=0.0.0.0 -ui
+#     networks:
+#       - default
+#     environment:
+#       - CONSUL_BIND_INTERFACE=eth0
+
+#   # User Service
+#   user-service:
+#     build:
+#       context: .
+#       dockerfile: apps/user-service/dockerfile
+#     ports:
+#       - '3001:3001'
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - DB_STORAGE_PATH=/usr/src/app/libs/infrastructure/src/databases/sequelize/.db/data.sqlite3
+#       - CONSUL_HOST=consul  # Consul service discovery host
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=user-service
+#       - SERVICE_ID=user-service-1
+#       - SERVICE_PORT=3001
+#     volumes:
+#       - .:/usr/src/app
+#       - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db  # Map SQLite volume to the user-service
+#     command: >
+#       sh -c "
+#         # Register the service with Consul
+#         curl -X PUT -d '
+#         {
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"user-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nodejs\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+#     depends_on:
+#       - consul
+#       - email-service
+#       - sqlite3
+#     networks:
+#       - default
+
+#   # Email Service
+#   email-service:
+#     build:
+#       context: .
+#       dockerfile: apps/email-service/dockerfile
+#     ports:
+#       - '3003:3003'
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - CONSUL_HOST=consul  # Consul service discovery host
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=email-service
+#       - SERVICE_ID=email-service-1
+#       - SERVICE_PORT=3003
+#     volumes:
+#       - .:/usr/src/app
+#     command: >
+#       sh -c "
+#         # Register the service with Consul
+#         curl -X PUT -d '
+#         {
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"email-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nodejs\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+#     depends_on:
+#       - consul
+#       - nats
+#     networks:
+#       - default
+#     # Cache service
+#   cache-service:
+#     build:
+#       context: .
+#       dockerfile: apps/cache-service/dockerfile
+#     ports:
+#       - '3002:3002'  # Avoid port conflict with Redis
+#     environment:
+#       - NODE_ENV=development
+#       - JWT_SECRET=your_jwt_secret_key
+#       - CONSUL_HOST=consul  # Consul service discovery host
+#       - CONSUL_PORT=8500
+#       - SERVICE_NAME=cache-service
+#       - SERVICE_ID=cache-service-1
+#       - SERVICE_PORT=3002
+#     volumes:
+#       - .:/usr/src/app
+#     command: >
+#       sh -c "
+#         # Register the service with Consul
+#         curl -X PUT -d '
+#         {
+#           \"ID\": \"${SERVICE_ID}\",
+#           \"Name\": \"${SERVICE_NAME}\",
+#           \"Address\": \"cache-service\",
+#           \"Port\": ${SERVICE_PORT},
+#           \"Tags\": [\"nodejs\"]
+#         }' http://consul:8500/v1/agent/service/register &&
+#         npm run start:dev
+#       "
+#     depends_on:
+#       - consul
+#       - redis
+#     networks:
+#       - default
+#   # SQLite3 database container
+#   sqlite3:
+#     image: nouchka/sqlite3:latest
+#     container_name: sqlite3
+#     volumes:
+#       - ./libs/infrastructure/src/databases/sequelize/.db:/usr/src/app/libs/infrastructure/src/databases/sequelize/.db  # Ensure SQLite data is accessible and persists
+#     networks:
+#       - default
+#     ports:
+#       - "8080:8080" # Optional: expose a port if necessary for debugging
+#     stdin_open: true # Keep stdin open to allow for interactive mode
+#     tty: true        # Allocate a pseudo-TTY
+
+# networks:
+#   default:
+#     driver: bridge
+#   kafka-network:
+#     driver: bridge

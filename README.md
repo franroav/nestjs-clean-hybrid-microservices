@@ -14,6 +14,11 @@ This document provides an overview of a microservices architecture built using v
 - [Diagram Overview](#diagram-overview)
 - [Conclusion](#conclusion)
 
+
+## Architecture Diagram
+
+![Arquitecture Diagram](https://s3.amazonaws.com/awsfranroavdeveloper.click/resources/images/logo-solicitante/serverless-microservice-architecture.png)
+
 <a name="microservices"/>
 
 ## 🛠️ Microservices

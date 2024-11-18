@@ -38,6 +38,6 @@ coverage/
 Thumbs.db
 
 # Docker files (optional)
-docker-compose*.yml
+# docker-compose*.yml
 
 package-lock.json
